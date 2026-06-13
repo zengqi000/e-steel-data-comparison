@@ -324,7 +324,7 @@ def fetch_sell_return(contract_list: list) -> list:
 # ============================================================
 
 def build_contract_check_map(records):
-    """构建销售合同业务检查数据的映射"""
+    """构建销售合同业务检查数据的映射（含汇总+明细）"""
     result = {}
     for r in records:
         key = str(r.get("outContractNo", "")).strip()
@@ -333,50 +333,85 @@ def build_contract_check_map(records):
                 "newPickupWeight": float(r.get("newPickupWeight") or 0),
                 "newPickupSumAmount": float(r.get("newPickupSumAmount") or 0),
                 "newRealPickWeight": float(r.get("newRealPickWeight") or 0),
-                "newSellReturnWeight": float(r.get("newSellReturnWeight") or 0)
+                "newSellReturnWeight": float(r.get("newSellReturnWeight") or 0),
+                "contractNo": str(r.get("contractNo", "")).strip(),
+                "sapCode": str(r.get("sapCode", "")).strip(),
+                "customerName": str(r.get("customerName", "")).strip(),
+                "brandName": str(r.get("brandName", "")).strip(),
+                "materialName": str(r.get("materialName", "")).strip(),
+                "specName": str(r.get("specName", "")).strip(),
+                "quantity": float(r.get("quantity") or 0),
+                "unitPrice": float(r.get("unitPrice") or 0),
+                "contractAmount": float(r.get("contractAmount") or 0),
             }
     return result
 
 
 def build_pickup_check_map(records):
-    """构建销售提单业务检查的 sumWeight 汇总"""
-    result = {}
+    """构建销售提单业务检查的汇总和明细（sumWeight, sumAmount, 记录列表）"""
+    sum_map = {}
+    detail_map = {}  # key -> list of records
+    amount_map = {}  # sumAmount 汇总
     for r in records:
         key = str(r.get("sellOutContractNo", "")).strip()
         if key:
-            result[key] = result.get(key, 0) + float(r.get("sumWeight") or 0)
-    return result
+            sum_map[key] = sum_map.get(key, 0) + float(r.get("sumWeight") or 0)
+            amount_map[key] = amount_map.get(key, 0) + float(r.get("sumAmount") or 0)
+            if key not in detail_map:
+                detail_map[key] = []
+            detail_map[key].append(r)
+    return sum_map, detail_map, amount_map
 
 
 def build_real_pickup_check_map(records):
-    """构建销售实提业务检查的 sumWeight 汇总"""
-    result = {}
+    """构建销售实提业务检查的汇总和明细"""
+    sum_map = {}
+    detail_map = {}
+    amount_map = {}
     for r in records:
         key = str(r.get("sellOutContractNo", "")).strip()
         if key:
-            result[key] = result.get(key, 0) + float(r.get("sumWeight") or 0)
-    return result
+            sum_map[key] = sum_map.get(key, 0) + float(r.get("sumWeight") or 0)
+            amount_map[key] = amount_map.get(key, 0) + float(r.get("sumAmount") or 0)
+            if key not in detail_map:
+                detail_map[key] = []
+            detail_map[key].append(r)
+    return sum_map, detail_map, amount_map
 
 
 def build_sell_return_map(records):
-    """构建销售退货的 weight 汇总"""
-    result = {}
+    """构建销售退货的汇总和明细"""
+    sum_map = {}
+    detail_map = {}
+    amount_map = {}
     for r in records:
         key = str(r.get("sellContractOutNo", "")).strip()
         if key:
-            result[key] = result.get(key, 0) + float(r.get("weight") or 0)
-    return result
+            sum_map[key] = sum_map.get(key, 0) + float(r.get("weight") or 0)
+            amount_map[key] = amount_map.get(key, 0) + float(r.get("amount") or 0)
+            if key not in detail_map:
+                detail_map[key] = []
+            detail_map[key].append(r)
+    return sum_map, detail_map, amount_map
 
 
-def compare_data(contract_check_map, pickup_check_map, real_pickup_check_map, sell_return_map):
-    """对比所有数据，返回差异列表"""
+def compare_data(contract_check_map, pickup_sum_map, real_pickup_sum_map, sell_return_sum_map,
+                  pickup_amount_map, real_pickup_amount_map, sell_return_amount_map,
+                  display_name_map=None):
+    """对比所有数据，返回差异列表。
+
+    Args:
+        display_name_map: api_key -> 用户原始名称的映射，用于显示合同名称
+    """
     diff_rows = []
 
     # 获取所有合同号
-    all_contracts = set(contract_check_map.keys()) | set(pickup_check_map.keys()) | set(real_pickup_check_map.keys()) | set(sell_return_map.keys())
+    all_contracts = set(contract_check_map.keys()) | set(pickup_sum_map.keys()) | set(real_pickup_sum_map.keys()) | set(sell_return_sum_map.keys())
 
     for contract_no in sorted(all_contracts):
-        row = {"合同名称": contract_no}
+        # 优先使用用户输入的合同名称
+        display_name = display_name_map.get(contract_no, contract_no) if display_name_map else contract_no
+        row = {"合同名称": display_name}
 
         # 从销售合同业务检查接口获取基准值
         check_data = contract_check_map.get(contract_no)
@@ -391,25 +426,27 @@ def compare_data(contract_check_map, pickup_check_map, real_pickup_check_map, se
             row["实提重量(合同检查)"] = 0
             row["销售退货重量(合同检查)"] = 0
 
-        # 从销售提单业务检查获取实际值
-        row["提单重量(提单检查)"] = round(pickup_check_map.get(contract_no, 0), 3)
+        row["提单重量(提单检查)"] = round(pickup_sum_map.get(contract_no, 0), 3)
+        row["实提重量(实提检查)"] = round(real_pickup_sum_map.get(contract_no, 0), 3)
+        row["销售退货重量(退货报表)"] = round(sell_return_sum_map.get(contract_no, 0), 3)
 
-        # 从销售实提业务检查获取实际值
-        row["实提重量(实提检查)"] = round(real_pickup_check_map.get(contract_no, 0), 3)
-
-        # 从销售退货报表获取实际值
-        row["销售退货重量(退货报表)"] = round(sell_return_map.get(contract_no, 0), 3)
+        # 金额对比
+        row["提单金额(提单检查)"] = round(pickup_amount_map.get(contract_no, 0), 2)
+        row["实提金额(实提检查)"] = round(real_pickup_amount_map.get(contract_no, 0), 2)
+        row["退货金额(退货报表)"] = round(sell_return_amount_map.get(contract_no, 0), 2)
 
         # 计算差异
         row["提单重量差异"] = round(row["提单重量(合同检查)"] - row["提单重量(提单检查)"], 3)
         row["实提重量差异"] = round(row["实提重量(合同检查)"] - row["实提重量(实提检查)"], 3)
         row["销售退货重量差异"] = round(row["销售退货重量(合同检查)"] - row["销售退货重量(退货报表)"], 3)
+        row["提单金额差异"] = round(row["提单金额(合同检查)"] - row["提单金额(提单检查)"], 2)
 
         # 判断是否有差异
         has_diff = (
             abs(row["提单重量差异"]) > WEIGHT_TOLERANCE or
             abs(row["实提重量差异"]) > WEIGHT_TOLERANCE or
-            abs(row["销售退货重量差异"]) > WEIGHT_TOLERANCE
+            abs(row["销售退货重量差异"]) > WEIGHT_TOLERANCE or
+            abs(row["提单金额差异"]) > 0.01
         )
 
         if has_diff:
@@ -449,6 +486,7 @@ FIELD_SOURCES = {
 }
 
 # 列宽定义（按终端显示宽度，中文=2，英文/数字=1）
+# 用于旧的逐行对比表（保留兼容）
 COL_WIDTHS = [16, 32, 36, 14]  # 核对项, 合同检查, 业务表, 差异
 COL_NAMES  = ["核对项", "合同检查(来源字段)", "业务表(来源)", "差异"]
 
@@ -520,6 +558,159 @@ def print_table_footer():
 
 
 # ============================================================
+# 横向对比表：合同业务检查 vs 各业务表（字段并排对比）
+# ============================================================
+
+def print_compare_table(display_name, pw_check, pa_check, rpw_check, srw_check,
+                        pickup_weight, pickup_amt, real_pickup_weight, return_weight):
+    """打印横向对比表，将合同业务检查与各业务表的对应字段并排对比
+
+    三组对比：
+      1) 提单重量：合同检查 vs 提单检查 → 差异
+      2) 实提重量：合同检查 vs 实提检查 → 差异
+      3) 退货重量：合同检查 vs 退货报表 → 差异
+    """
+
+    # 列宽数组：核对项 | 提单重量(合同) | 提单重量(提单) | 差异 | 实提重量(合同) | 实提重量(实提) | 差异 | 退货重量(合同) | 退货重量(退货) | 差异 | 状态
+    widths = [10, 16, 16, 10, 16, 16, 10, 16, 16, 10, 10]
+
+    sep = "+" + "+".join("-" * w for w in widths) + "+"
+
+    def pad(s, w):
+        s = str(s)
+        cur = str_width(s)
+        return s + " " * max(0, w - cur)
+
+    def row(cells):
+        padded = [pad(c, widths[i]) for i, c in enumerate(cells)]
+        print("  |" + "|".join(padded) + "|")
+
+    # 表头行1：分组标题
+    header1 = ["核对项", "提单重量(t)", "", "", "实提重量(t)", "", "", "退货重量(t)", "", "", "状态"]
+    row(header1)
+
+    # 表头行2：来源标签
+    header2 = ["", "合同检查", "提单检查", "差异", "合同检查", "实提检查", "差异", "合同检查", "退货报表", "差异", ""]
+    row(header2)
+
+    print(f"  {sep}")
+
+    # 数据行
+    pw_diff = round(pw_check - pickup_weight, 3)
+    rpw_diff = round(rpw_check - real_pickup_weight, 3)
+    srw_diff = round(srw_check - return_weight, 3)
+
+    pw_status = "✅" if abs(pw_diff) <= WEIGHT_TOLERANCE else "❌"
+    rpw_status = "✅" if abs(rpw_diff) <= WEIGHT_TOLERANCE else "❌"
+    srw_status = "✅" if abs(srw_diff) <= WEIGHT_TOLERANCE else "❌"
+
+    data = [
+        "重量",
+        format_weight(pw_check),
+        format_weight(pickup_weight),
+        format_weight(pw_diff) if pw_diff != 0 else "0",
+        format_weight(rpw_check),
+        format_weight(real_pickup_weight),
+        format_weight(rpw_diff) if rpw_diff != 0 else "0",
+        format_weight(srw_check),
+        format_weight(return_weight),
+        format_weight(srw_diff) if srw_diff != 0 else "0",
+        f"{pw_status}{rpw_status}{srw_status}",
+    ]
+    row(data)
+
+    print(f"  {sep}")
+
+    # 金额行（仅提单金额 vs 提单检查金额）
+    pa_diff = round(pa_check - pickup_amt, 2)
+    pa_status = "✅" if abs(pa_diff) <= 0.01 else "❌"
+
+    amt_header = ["提单金额(¥)", "合同检查", "提单检查", "差异", "", "", "", "", "", "", "状态"]
+    row(amt_header)
+    print(f"  {sep}")
+
+    amt_data = [
+        "",
+        format_amount(pa_check),
+        format_amount(pickup_amt),
+        format_amount(pa_diff) if pa_diff != 0 else "0",
+        "—", "—", "—", "—", "—", "—",
+        pa_status,
+    ]
+    row(amt_data)
+    print(f"  {sep}")
+
+
+# ============================================================
+# 详细输出：合同基本信息 & 子记录明细
+# ============================================================
+
+def print_contract_info(check_data):
+    """打印合同基本信息"""
+    if not check_data:
+        print("  ⚠️ 未从合同检查接口获取到该合同数据")
+        return
+
+    fields = [
+        ("SAP编码", check_data.get("sapCode", "")),
+        ("客户名称", check_data.get("customerName", "")),
+        ("品牌", check_data.get("brandName", "")),
+        ("材质", check_data.get("materialName", "")),
+        ("规格", check_data.get("specName", "")),
+        ("合同数量(t)", format_weight(check_data.get("quantity", 0))),
+        ("合同单价", format_amount(check_data.get("unitPrice", 0))),
+        ("合同金额", format_amount(check_data.get("contractAmount", 0))),
+    ]
+    print("  📋 合同基本信息：")
+    for label, value in fields:
+        if value and value != "0" and value != "":
+            print(f"     {label}: {value}")
+
+
+def print_detailed_records(title, records, weight_field="sumWeight", amount_field=None,
+                           show_fields=None):
+    """打印子表记录明细
+
+    Args:
+        title: 标题
+        records: 记录列表
+        weight_field: 重量字段名
+        amount_field: 金额字段名（None 则不显示金额列）
+        show_fields: 额外要显示的字段列表（字段名, 显示名）
+    """
+    if not records:
+        print(f"  📎 {title}：无记录")
+        return
+
+    total_weight = sum(float(r.get(weight_field) or 0) for r in records)
+    total_amount = sum(float(r.get(amount_field) or 0) for r in records) if amount_field else 0
+
+    print(f"  📎 {title}：共 {len(records)} 条记录，合计重量 {format_weight(total_weight)}t", end="")
+    if amount_field and total_amount > 0:
+        print(f"，合计金额 ¥{format_amount(total_amount)}", end="")
+    print()
+
+    # 只显示前 20 条明细
+    display_records = records[:20]
+    for i, r in enumerate(display_records, 1):
+        w = float(r.get(weight_field) or 0)
+        parts = [f"    {i}. 重量={format_weight(w)}t"]
+        if amount_field:
+            a = float(r.get(amount_field) or 0)
+            if a > 0:
+                parts.append(f"金额=¥{format_amount(a)}")
+        if show_fields:
+            for fname, flabel in show_fields:
+                val = str(r.get(fname, "")).strip()
+                if val:
+                    parts.append(f"{flabel}={val}")
+        print("，".join(parts))
+
+    if len(records) > 20:
+        print(f"    ... 还有 {len(records) - 20} 条记录未显示")
+
+
+# ============================================================
 # 主流程
 # ============================================================
 
@@ -532,29 +723,62 @@ def main():
 
     print("🔄 正在查询销售提单业务检查数据...")
     pickup_check_records = fetch_pickup_check(contract_list)
-    pickup_check_map = build_pickup_check_map(pickup_check_records)
+    pickup_sum_map, pickup_detail_map, pickup_amount_map = build_pickup_check_map(pickup_check_records)
 
     print("🔄 正在查询销售实提业务检查数据...")
     real_pickup_check_records = fetch_real_pickup_check(contract_list)
-    real_pickup_check_map = build_real_pickup_check_map(real_pickup_check_records)
+    real_pickup_sum_map, real_pickup_detail_map, real_pickup_amount_map = build_real_pickup_check_map(real_pickup_check_records)
 
     print("🔄 正在查询销售退货报表数据...")
     sell_return_records = fetch_sell_return(contract_list)
-    sell_return_map = build_sell_return_map(sell_return_records)
+    sell_return_sum_map, sell_return_detail_map, sell_return_amount_map = build_sell_return_map(sell_return_records)
 
     print("🔄 正在对比数据...\n")
-    diff_rows = compare_data(contract_check_map, pickup_check_map, real_pickup_check_map, sell_return_map)
 
-    # 所有合同
-    all_contracts = sorted(set(contract_check_map.keys()) | set(pickup_check_map.keys()) | set(real_pickup_check_map.keys()) | set(sell_return_map.keys()))
+    # 收集所有 API 返回的合同号
+    api_keys = set(contract_check_map.keys()) | set(pickup_sum_map.keys()) | set(real_pickup_sum_map.keys()) | set(sell_return_sum_map.keys())
 
-    # 输出每个合同的详细数据（表格格式）
+    # 构建 API key → 用户原始名称的映射（保留用户输入的合同名原样，一个字都不改）
+    def _find_best_match(user_name, candidates):
+        """在候选 API key 中找到与用户输入最匹配的"""
+        if user_name in candidates:
+            return user_name
+        for c in candidates:
+            if user_name in c or c in user_name:
+                return c
+        return user_name  # 找不到就用用户原始名
+
+    name_map = {}  # api_key -> user_original_name
+    if contract_list:
+        # 用户指定了合同名：以用户输入为准，顺序也保持一致
+        for uname in contract_list:
+            matched = _find_best_match(uname, api_keys)
+            if matched not in name_map:
+                name_map[matched] = uname
+        # 迭代顺序跟随用户输入
+        ordered_contracts = []
+        seen = set()
+        for uname in contract_list:
+            matched = _find_best_match(uname, api_keys)
+            if matched not in seen:
+                ordered_contracts.append(matched)
+                seen.add(matched)
+    else:
+        # 时间段查询或全量查询：按 API key 排序
+        ordered_contracts = sorted(api_keys)
+
+    diff_rows = compare_data(contract_check_map, pickup_sum_map, real_pickup_sum_map, sell_return_sum_map,
+                             pickup_amount_map, real_pickup_amount_map, sell_return_amount_map,
+                             display_name_map=name_map)
+
+    # 输出每个合同的详细数据
     diff_count = 0
-    for idx, contract_no in enumerate(all_contracts):
+    for idx, contract_no in enumerate(ordered_contracts):
+        display_name = name_map.get(contract_no, contract_no)  # 优先用用户原始名
         check_data = contract_check_map.get(contract_no)
-        pickup_weight = round(pickup_check_map.get(contract_no, 0), 3)
-        real_pickup_weight = round(real_pickup_check_map.get(contract_no, 0), 3)
-        return_weight = round(sell_return_map.get(contract_no, 0), 3)
+        pickup_weight = round(pickup_sum_map.get(contract_no, 0), 3)
+        real_pickup_weight = round(real_pickup_sum_map.get(contract_no, 0), 3)
+        return_weight = round(sell_return_sum_map.get(contract_no, 0), 3)
 
         if check_data:
             pw_check = round(check_data["newPickupWeight"], 3)
@@ -568,30 +792,76 @@ def main():
         rpw_diff = round(rpw_check - real_pickup_weight, 3)
         srw_diff = round(srw_check - return_weight, 3)
 
-        has_diff = abs(pw_diff) > WEIGHT_TOLERANCE or abs(rpw_diff) > WEIGHT_TOLERANCE or abs(srw_diff) > WEIGHT_TOLERANCE
+        # 金额对比
+        pickup_amt = round(pickup_amount_map.get(contract_no, 0), 2)
+        pa_diff = round(pa_check - pickup_amt, 2)
+
+        has_diff = (abs(pw_diff) > WEIGHT_TOLERANCE or abs(rpw_diff) > WEIGHT_TOLERANCE or
+                    abs(srw_diff) > WEIGHT_TOLERANCE or abs(pa_diff) > 0.01)
         overall_status = "❌" if has_diff else "✅"
         if has_diff:
             diff_count += 1
 
-        # 合同标题
-        print(f"{overall_status} {contract_no}")
-        print_table_header()
-        print_data_row_raw("提单重量", format_weight(pw_check), format_weight(pickup_weight), pw_diff)
-        print_data_row("提单金额", format_amount(pa_check), "-", "-", "-")
-        print_data_row_raw("实提重量", format_weight(rpw_check), format_weight(real_pickup_weight), rpw_diff)
-        print_data_row_raw("销售退货重量", format_weight(srw_check), format_weight(return_weight), srw_diff)
-        print_table_footer()
+        # ===== 合同标题 & 基本信息 =====
+        print(f"\n{'=' * 60}")
+        print(f"{overall_status} [{idx + 1}/{len(ordered_contracts)}] {display_name}")
+        print(f"{'=' * 60}")
+
+        # 合同基本信息
+        print_contract_info(check_data)
+
+        # ===== 横向对比表 =====
+        print_compare_table(
+            display_name=display_name,
+            pw_check=pw_check,
+            pa_check=pa_check,
+            rpw_check=rpw_check,
+            srw_check=srw_check,
+            pickup_weight=pickup_weight,
+            pickup_amt=pickup_amt,
+            real_pickup_weight=real_pickup_weight,
+            return_weight=return_weight,
+        )
+
+        if has_diff:
+            print(f"  ⚠️ 发现差异，详见下方明细：")
+
+        # ===== 子表记录明细 =====
+        pickup_records = pickup_detail_map.get(contract_no, [])
+        real_pickup_records = real_pickup_detail_map.get(contract_no, [])
+        return_records = sell_return_detail_map.get(contract_no, [])
+
         print()
+        print_detailed_records(
+            "销售提单记录", pickup_records,
+            weight_field="sumWeight", amount_field="sumAmount",
+            show_fields=[("materialName", "材质"), ("specName", "规格"), ("warehouseName", "仓库")]
+        )
+
+        print_detailed_records(
+            "销售实提记录", real_pickup_records,
+            weight_field="sumWeight", amount_field="sumAmount",
+            show_fields=[("materialName", "材质"), ("specName", "规格"), ("warehouseName", "仓库")]
+        )
+
+        print_detailed_records(
+            "销售退货记录", return_records,
+            weight_field="weight", amount_field="amount",
+            show_fields=[("materialName", "材质"), ("specName", "规格"), ("brandName", "品牌")]
+        )
 
     # 汇总
-    print("=" * 50)
-    print(f"📊 核对完成：共 {len(all_contracts)} 个合同")
+    print()
+    print("=" * 60)
+    print(f"📊 核对完成：共 {len(ordered_contracts)} 个合同")
     if diff_count > 0:
         print(f"❌ 发现 {diff_count} 个合同存在差异：")
         for r in diff_rows:
             print(f"   · {r['合同名称']}")
             if abs(r["提单重量差异"]) > WEIGHT_TOLERANCE:
                 print(f"     提单重量差异：{format_weight(r['提单重量(合同检查)'])} - {format_weight(r['提单重量(提单检查)'])} = {format_weight(r['提单重量差异'])}")
+            if abs(r.get("提单金额差异", 0)) > 0.01:
+                print(f"     提单金额差异：¥{format_amount(r['提单金额(合同检查)'])} - ¥{format_amount(r.get('提单金额(提单检查)', 0))} = ¥{format_amount(r.get('提单金额差异', 0))}")
             if abs(r["实提重量差异"]) > WEIGHT_TOLERANCE:
                 print(f"     实提重量差异：{format_weight(r['实提重量(合同检查)'])} - {format_weight(r['实提重量(实提检查)'])} = {format_weight(r['实提重量差异'])}")
             if abs(r["销售退货重量差异"]) > WEIGHT_TOLERANCE:
