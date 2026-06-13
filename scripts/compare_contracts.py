@@ -1,11 +1,14 @@
 """
 销售合同 vs 销售实提 重量核对脚本
 对比完成后直接输出 Excel 到 stdout（base64），供 WorkBuddy 弹窗下载
-用法：python compare_reports.py "合同名1" "合同名2" ...
-      不带参数 = 查询全部合同
+用法：
+  python compare_contracts.py "合同名1" "合同名2" ...   指定合同名
+  python compare_contracts.py --date-range 20260610-20260612  按时间段查询
+  python compare_contracts.py                           查询全部合同
 """
 
 import sys
+import re
 import requests
 import json
 import base64
@@ -33,11 +36,6 @@ WEIGHT_TOLERANCE = 0.001
 # 解析合同号
 # ============================================================
 
-def parse_contract_list(raw: str) -> list:
-    import re
-    return [c.strip() for c in re.split(r"[,，、\n]+", raw) if c.strip()]
-
-
 def _is_token_expired(msg: str) -> bool:
     """检测接口返回的消息是否表示 TOKEN 过期"""
     keywords = ["token过期", "token已过期", "token expired", "登录过期", "登录已过期",
@@ -49,10 +47,115 @@ def _is_token_expired(msg: str) -> bool:
 
 
 def get_contract_list() -> list:
-    if len(sys.argv) > 1:
-        return [a.strip() for a in sys.argv[1:] if a.strip()]
-    raw = input("请输入合同名称（多个用逗号分隔，直接回车查全部）：").strip()
-    return parse_contract_list(raw) if raw else []
+    """从命令行参数解析合同列表，支持三种模式：
+    1. --date-range 20260610-20260612  按时间段查询合同
+    2. "合同名1" "合同名2" ...         指定合同名
+    3. 无参数                          查询全部合同
+    """
+    args = [a.strip() for a in sys.argv[1:] if a.strip()]
+
+    # 模式1：按时间段查询
+    if args and args[0] == "--date-range":
+        if len(args) < 2:
+            print("❌ 请提供时间段，格式：--date-range 20260610-20260612", file=sys.stderr)
+            sys.exit(1)
+        return fetch_contract_list_by_date(args[1])
+
+    # 模式2：指定合同名
+    if args:
+        return args
+
+    # 模式3：查询全部
+    return []
+
+
+# ============================================================
+# 按时间段查询销售合同列表
+# ============================================================
+
+def parse_date_range(date_range_str: str):
+    """解析时间段字符串，返回 (start_ts_ms, end_ts_ms)
+    支持格式：20260610-20260612 或 20260610
+    """
+    match = re.match(r'^(\d{8})(?:-(\d{8}))?$', date_range_str)
+    if not match:
+        raise ValueError(f"时间段格式错误：{date_range_str}，正确格式：20260610-20260612")
+
+    start_str = match.group(1)
+    end_str = match.group(2) or start_str  # 如果只传一个日期，开始=结束
+
+    start_dt = datetime.strptime(start_str, "%Y%m%d")
+    end_dt = datetime.strptime(end_str, "%Y%m%d")
+
+    # 结束日期取当天 23:59:59.999
+    end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999000)
+
+    start_ms = int(start_dt.timestamp() * 1000)
+    end_ms = int(end_dt.timestamp() * 1000)
+
+    return start_ms, end_ms
+
+
+def fetch_contract_list_by_date(date_range_str: str) -> list:
+    """根据时间段查询销售合同列表，返回 outContractNo 列表"""
+    start_ms, end_ms = parse_date_range(date_range_str)
+
+    url = "https://manage.itgmetals.com/api/itg-es-scroll-webapp/sell-contract/scroll"
+    body = {
+        "contractNoList": [],
+        "outContractNoList": [],
+        "sapCodeList": [],
+        "orgIdList": [],
+        "deptGroupIdList": [],
+        "customerIdList": [],
+        "budgetContractNoList": [],
+        "saleManIdList": [],
+        "merchandiserId": [],
+        "createAdList": [],
+        "sellContractTypeList": [],
+        "queryStatus": 9,
+        "contractDateStart": start_ms,
+        "contractDateEnd": end_ms
+    }
+
+    all_records = []
+    # 分页拉取所有数据
+    page = 1
+    while True:
+        body["pageNo"] = page
+        body["pageSize"] = 200
+        resp = requests.post(url, headers=HEADERS, json=body, timeout=30)
+        resp.raise_for_status()
+        result = resp.json()
+        if result.get("code") != 200:
+            msg = result.get("msg", "")
+            if _is_token_expired(msg):
+                print("__TOKEN_EXPIRED__", file=sys.stderr)
+                sys.exit(99)
+            raise ValueError(f"销售合同列表接口异常: {msg}")
+
+        data = result.get("data") or []
+        if not data:
+            break
+        all_records.extend(data)
+        # 如果返回数据不足一页，说明没有更多了
+        if len(data) < 200:
+            break
+        page += 1
+
+    # 提取 outContractNo 并去重
+    contract_names = list(dict.fromkeys(
+        str(r.get("outContractNo", "")).strip()
+        for r in all_records
+        if str(r.get("outContractNo", "")).strip()
+    ))
+
+    start_display = datetime.fromtimestamp(start_ms / 1000).strftime("%Y-%m-%d")
+    end_display = datetime.fromtimestamp(end_ms / 1000).strftime("%Y-%m-%d")
+    print(f"📅 查询时间段：{start_display} ~ {end_display}")
+    print(f"📋 查到 {len(contract_names)} 个销售合同")
+
+    return contract_names
 
 # ============================================================
 # API 请求
