@@ -16,7 +16,7 @@ from datetime import datetime
 # 配置区域 - 只需修改 TOKEN
 # ============================================================
 
-TOKEN = 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJwa0lkIjoiMTYwMzAyMDU4MTgzMTEzOTMyOSIsInVzZXJfbmFtZSI6IiZBRE1JTiZjZW5ncWlAaXRnLm5ldCIsIm9wZW5JZCI6IjYyMDBjNjI2ZTRiMDYwZjU5ZWMzN2NjMiIsIm9hQ29tcGFueU5hbWUiOiLljqbpl6jlm73otLjmlbDlrZfnp5HmioDmnInpmZDlhazlj7giLCJjbGllbnRfaWQiOiJpdGctZ2F0ZXdheSIsIndvcmtOdW0iOiI1MDQ4NzUiLCJzYXBEZXB0Q29kZSI6IlNLNiIsInNhcERlcHRJZCI6MjAsInNjb3BlIjpbImFsbCJdLCJjb250ZXh0VHlwZSI6ImFkbWluX2NvbnRleHQiLCJjb21wYW55Ijoi5Y6m6Zeo5Zu96LS45pWw5a2X56eR5oqA5pyJ6ZmQ5YWs5Y-4Iiwic2FwQ29tcGFueUNvZGUiOiJDT00wMDAwMjU1IiwiZXhwIjoxNzgxMzQyNzU3LCJqdGkiOiIzNzM2NTc4OC02YmM5LTQ1NzAtOWRjNi0zZjQ2MTU5NmYzMzgiLCJvYURlcHRJZCI6IjEzNDMiLCJjb21wYW55Q29kZSI6IkNPTTAwMDAyNTUiLCJzYXBDb21wYW55SWQiOjcxLCJ0ZWxlcGhvbmUiOiIxODcyMDkzNjA2MSIsImRlcHQiOiLmtYvor5Xnu4QiLCJvYURlcHROYW1lIjoi6ZKi6ZOB5Lia5Yqh5pWw5a2X5YyW6YOoIiwicGhvbmUiOiIxODcyMDkzNjA2MSIsIm5hbWUiOiLmm77nkKoiLCJkZXB0Q29kZSI6IjMwMzQ2MiIsIm9hSWQiOiIxNDcxNyIsInNhcENvbXBhbnlOYW1lIjoi5Y6m6Zeo5Zu96LS45pWw5a2X56eR5oqA5pyJ6ZmQ5YWs5Y-4Iiwic2FwRGVwdE5hbWUiOiLCoOWbvei0uOaVsOenkemDqOmHkeWxnuS4muWKoeaUr-aMgemDqCIsInVzZXJuYW1lIjoiY2VuZ3FpQGl0Zy5uZXQiLCJvYUNvbXBhbnlJZCI6IjIzMSJ9.ae2p8r2la-svMZJUcGwF-5mccB6s7tBOU0ewcE0IBkXyO04NuKmjll3OEKIU56M9NSbbN0JrpLjUQgp6LwzaauMBG0VxurXtkqjzlViRtOU2m6t_YzujDdpZr1-O1HnZ8tyGSn3zfUWBuI8cODNLhCIMFS73_lVkacS5q2QpyBwL9bE67Tb75e-q_V4yFDVDNWKtrOPV1javEZloPXqHbAvNrxwsUMlMn1E1NA36rDXmcxcx0uQ_zsRQm5j0fbMGGCETdvbBCSQBQlo_CaXgzIG46hZNvGARyCwu571j9ARm36v8ChxsscSYMH_iNcRPZkv7NiAXP1X6Z48gyFnLTA'
+TOKEN = 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJwa0lkIjoiMTYwMzAyMDU4MTgzMTEzOTMyOSIsInVzZXJfbmFtZSI6IiZBRE1JTiZjZW5ncWlAaXRnLm5ldCIsIm9wZW5JZCI6IjYyMDBjNjI2ZTRiMDYwZjU5ZWMzN2NjMiIsIm9hQ29tcGFueU5hbWUiOiLljqbpl6jlm73otLjmlbDlrZfnp5HmioDmnInpmZDlhazlj7giLCJjbGllbnRfaWQiOiJpdGctZ2F0ZXdheSIsIndvcmtOdW0iOiI1MDQ4NzUiLCJzYXBEZXB0Q29kZSI6IlNLNiIsInNhcERlcHRJZCI6MjAsInNjb3BlIjpbImFsbCJdLCJjb250ZXh0VHlwZSI6ImFkbWluX2NvbnRleHQiLCJjb21wYW55Ijoi5Y6m6Zeo5Zu96LS45pWw5a2X56eR5oqA5pyJ6ZmQ5YWs5Y-4Iiwic2FwQ29tcGFueUNvZGUiOiJDT00wMDAwMjU1IiwiZXhwIjoxNzgxMzQ2NDUzLCJqdGkiOiJlZWJhNTI2NC0zZGU2LTQzNWItODhhNy1kNzMxYWU3YjNlYjUiLCJvYURlcHRJZCI6IjEzNDMiLCJjb21wYW55Q29kZSI6IkNPTTAwMDAyNTUiLCJzYXBDb21wYW55SWQiOjcxLCJ0ZWxlcGhvbmUiOiIxODcyMDkzNjA2MSIsImRlcHQiOiLmtYvor5Xnu4QiLCJvYURlcHROYW1lIjoi6ZKi6ZOB5Lia5Yqh5pWw5a2X5YyW6YOoIiwicGhvbmUiOiIxODcyMDkzNjA2MSIsIm5hbWUiOiLmm77nkKoiLCJkZXB0Q29kZSI6IjMwMzQ2MiIsIm9hSWQiOiIxNDcxNyIsInNhcENvbXBhbnlOYW1lIjoi5Y6m6Zeo5Zu96LS45pWw5a2X56eR5oqA5pyJ6ZmQ5YWs5Y-4Iiwic2FwRGVwdE5hbWUiOiLCoOWbvei0uOaVsOenkemDqOmHkeWxnuS4muWKoeaUr-aMgemDqCIsInVzZXJuYW1lIjoiY2VuZ3FpQGl0Zy5uZXQiLCJvYUNvbXBhbnlJZCI6IjIzMSJ9.goPT3aklWuvxti3c7de87DVhYz7_ekU08TAKTNL1gtVLHSKT4Re324iQoma9wPfRHzooTn-NeQ-j1ZgzWXnLJl0AE2VyzhoFTH20_pkXLJy7s7Gsa__Qba8p_02mDEtXyGTsaB8yEnksXP3lBxA34-kczCj8rBCsj6ifQbmhkSoncJq42xCO1haGeXR3tZIt8Q96te7vjitw6nvvHrQJcI_IpW0VJr0TBepU0DxQX2svXplpS3AQCtFcfcutMTFdzJnwCxT6LDQXlXm8kFQHJAHbk0z7eLDlMdnSjwlDV82lZ7h6TPnO_aMPSPzWURZ2-MznSAoPf-Fz-tkcyKds5w'
 
 HEADERS = {
     "accept": "application/json",
@@ -426,6 +426,99 @@ def format_weight(val):
     return s.rstrip('0').rstrip('.')
 
 
+def format_amount(val):
+    """格式化金额，保留2位小数"""
+    if val == 0:
+        return "0"
+    return f"{val:,.2f}"
+
+
+def status_icon(diff_val):
+    """根据差异值返回状态图标"""
+    if abs(diff_val) <= WEIGHT_TOLERANCE:
+        return "✅ 一致"
+    return "❌ 差异"
+
+
+# 字段来源映射
+FIELD_SOURCES = {
+    "提单重量":     ("newPickupWeight",     "销售提单.sumWeight"),
+    "提单金额":     ("newPickupSumAmount",  None),
+    "实提重量":     ("newRealPickWeight",   "销售实提.sumWeight"),
+    "销售退货重量": ("newSellReturnWeight", "销售退货.weight"),
+}
+
+# 列宽定义（按终端显示宽度，中文=2，英文/数字=1）
+COL_WIDTHS = [16, 32, 36, 14]  # 核对项, 合同检查, 业务表, 差异
+COL_NAMES  = ["核对项", "合同检查(来源字段)", "业务表(来源)", "差异"]
+
+
+def str_width(s):
+    """计算字符串在终端中的显示宽度"""
+    return sum(2 if ord(c) > 127 else 1 for c in str(s))
+
+
+def pad_str(s, width):
+    """按终端宽度右填充空格"""
+    s = str(s)
+    cur = str_width(s)
+    return s + " " * max(0, width - cur)
+
+
+def print_sep_line():
+    """打印分隔行"""
+    parts = ["-" * w for w in COL_WIDTHS]
+    line = "+".join(parts)
+    print(f"  +{line}+--------+")
+
+
+def print_table_header():
+    """打印表头"""
+    print_sep_line()
+    header_cells = [pad_str(COL_NAMES[i], COL_WIDTHS[i]) for i in range(4)]
+    print(f"  | {' | '.join(header_cells)} | 状态   |")
+    print_sep_line()
+
+
+def print_data_row(label, check_str, table_str, diff_str, status_str):
+    """打印数据行"""
+    cells = [
+        pad_str(label, COL_WIDTHS[0]),
+        pad_str(check_str, COL_WIDTHS[1]),
+        pad_str(table_str, COL_WIDTHS[2]),
+        pad_str(diff_str, COL_WIDTHS[3]),
+    ]
+    print(f"  | {' | '.join(cells)} | {status_str} |")
+
+
+def print_data_row_raw(label, check_str, table_str, diff_num, show_status=True):
+    """打印数据行（diff 为数值），附带字段来源"""
+    # 获取字段来源
+    src = FIELD_SOURCES.get(label, (None, None))
+    check_field = src[0]
+    table_field = src[1]
+
+    # 合同检查：值 (字段名)
+    check_text = f"{check_str} ({check_field})" if check_field else check_str
+    # 业务表：值 (表.字段)
+    if table_field and table_str != "-":
+        table_text = f"{table_str} ({table_field})"
+    else:
+        table_text = table_str
+
+    diff_str = format_weight(diff_num)
+    if show_status:
+        status_str = status_icon(diff_num)
+    else:
+        status_str = "-"
+    print_data_row(label, check_text, table_text, diff_str, status_str)
+
+
+def print_table_footer():
+    """打印表格底部"""
+    print_sep_line()
+
+
 # ============================================================
 # 主流程
 # ============================================================
@@ -455,8 +548,9 @@ def main():
     # 所有合同
     all_contracts = sorted(set(contract_check_map.keys()) | set(pickup_check_map.keys()) | set(real_pickup_check_map.keys()) | set(sell_return_map.keys()))
 
-    # 输出每个合同的详细数据
-    for contract_no in all_contracts:
+    # 输出每个合同的详细数据（表格格式）
+    diff_count = 0
+    for idx, contract_no in enumerate(all_contracts):
         check_data = contract_check_map.get(contract_no)
         pickup_weight = round(pickup_check_map.get(contract_no, 0), 3)
         real_pickup_weight = round(real_pickup_check_map.get(contract_no, 0), 3)
@@ -475,20 +569,25 @@ def main():
         srw_diff = round(srw_check - return_weight, 3)
 
         has_diff = abs(pw_diff) > WEIGHT_TOLERANCE or abs(rpw_diff) > WEIGHT_TOLERANCE or abs(srw_diff) > WEIGHT_TOLERANCE
-        status = "❌" if has_diff else "✅"
+        overall_status = "❌" if has_diff else "✅"
+        if has_diff:
+            diff_count += 1
 
-        print(f"{status} {contract_no}")
-        print(f"   提单重量：合同检查 {format_weight(pw_check)} | 提单检查 {format_weight(pickup_weight)} | 差异 {format_weight(pw_diff)}")
-        print(f"   提单金额：合同检查 {format_weight(pa_check)}")
-        print(f"   实提重量：合同检查 {format_weight(rpw_check)} | 实提检查 {format_weight(real_pickup_weight)} | 差异 {format_weight(rpw_diff)}")
-        print(f"   销售退货：合同检查 {format_weight(srw_check)} | 退货报表 {format_weight(return_weight)} | 差异 {format_weight(srw_diff)}")
+        # 合同标题
+        print(f"{overall_status} {contract_no}")
+        print_table_header()
+        print_data_row_raw("提单重量", format_weight(pw_check), format_weight(pickup_weight), pw_diff)
+        print_data_row("提单金额", format_amount(pa_check), "-", "-", "-")
+        print_data_row_raw("实提重量", format_weight(rpw_check), format_weight(real_pickup_weight), rpw_diff)
+        print_data_row_raw("销售退货重量", format_weight(srw_check), format_weight(return_weight), srw_diff)
+        print_table_footer()
         print()
 
     # 汇总
     print("=" * 50)
     print(f"📊 核对完成：共 {len(all_contracts)} 个合同")
-    if diff_rows:
-        print(f"❌ 发现 {len(diff_rows)} 条重量差异：")
+    if diff_count > 0:
+        print(f"❌ 发现 {diff_count} 个合同存在差异：")
         for r in diff_rows:
             print(f"   · {r['合同名称']}")
             if abs(r["提单重量差异"]) > WEIGHT_TOLERANCE:
