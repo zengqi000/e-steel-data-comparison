@@ -4,13 +4,22 @@
 用法：
   python compare_contracts.py "合同名1" "合同名2" ...   指定合同名
   python compare_contracts.py --date-range 20260610-20260612  按时间段查询
-  python compare_contracts.py                           查询全部合同
+  python compare_contracts.py --output pdf                 生成 PDF 报告
+  python compare_contracts.py "合同名1" --output pdf      指定合同并生成 PDF
 """
 
 import sys
 import re
 import requests
 from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import os
 
 # ============================================================
 # 配置区域 - 只需修改 TOKEN
@@ -45,22 +54,36 @@ def get_contract_list() -> list:
     1. --date-range 20260610-20260612  按时间段查询合同
     2. "合同名1" "合同名2" ...         指定合同名
     3. 无参数                          查询全部合同
+    4. --output pdf                      生成 PDF 报告
+
+    Returns:
+        (contract_list, output_format)
+        contract_list: 合同名列表
+        output_format: 'console' 或 'pdf'
     """
     args = [a.strip() for a in sys.argv[1:] if a.strip()]
+
+    # 解析 --output 参数
+    output_format = "console"
+    if "--output" in args:
+        idx = args.index("--output")
+        if idx + 1 < len(args) and args[idx + 1].lower() == "pdf":
+            output_format = "pdf"
+            args = args[:idx] + args[idx + 2:]  # 移除 --output pdf
 
     # 模式1：按时间段查询
     if args and args[0] == "--date-range":
         if len(args) < 2:
             print("❌ 请提供时间段，格式：--date-range 20260610-20260612", file=sys.stderr)
             sys.exit(1)
-        return fetch_contract_list_by_date(args[1])
+        return fetch_contract_list_by_date(args[1]), output_format
 
     # 模式2：指定合同名
     if args:
-        return args
+        return args, output_format
 
     # 模式3：查询全部
-    return []
+    return [], output_format
 
 
 # ============================================================
@@ -563,82 +586,75 @@ def print_table_footer():
 
 def print_compare_table(display_name, pw_check, pa_check, rpw_check, srw_check,
                         pickup_weight, pickup_amt, real_pickup_weight, return_weight):
-    """打印横向对比表，将合同业务检查与各业务表的对应字段并排对比
+    """打印对比结果，将需要对比的字段放在一起
 
-    三组对比：
-      1) 提单重量：合同检查 vs 提单检查 → 差异
-      2) 实提重量：合同检查 vs 实提检查 → 差异
-      3) 退货重量：合同检查 vs 退货报表 → 差异
+    输出格式：
+    销售合同名称：XXX
+
+    提单重量(t):
+      销售合同业务检查：XXX
+      销售提单业务检查：XXX
+      差异：XXX  ✅/❌
+
+    提单金额(¥):
+      销售合同业务检查：XXX
+      销售提单业务检查：XXX
+      差异：XXX  ✅/❌
+
+    实提重量(t):
+      销售合同业务检查：XXX
+      销售实提业务检查：XXX
+      差异：XXX  ✅/❌
+
+    退货重量(t):
+      销售合同业务检查：XXX
+      销售退货报表：XXX
+      差异：XXX  ✅/❌
     """
 
-    # 列宽数组：核对项 | 提单重量(合同) | 提单重量(提单) | 差异 | 实提重量(合同) | 实提重量(实提) | 差异 | 退货重量(合同) | 退货重量(退货) | 差异 | 状态
-    widths = [10, 16, 16, 10, 16, 16, 10, 16, 16, 10, 10]
-
-    sep = "+" + "+".join("-" * w for w in widths) + "+"
-
-    def pad(s, w):
-        s = str(s)
-        cur = str_width(s)
-        return s + " " * max(0, w - cur)
-
-    def row(cells):
-        padded = [pad(c, widths[i]) for i, c in enumerate(cells)]
-        print("  |" + "|".join(padded) + "|")
-
-    # 表头行1：分组标题
-    header1 = ["核对项", "提单重量(t)", "", "", "实提重量(t)", "", "", "退货重量(t)", "", "", "状态"]
-    row(header1)
-
-    # 表头行2：来源标签
-    header2 = ["", "合同检查", "提单检查", "差异", "合同检查", "实提检查", "差异", "合同检查", "退货报表", "差异", ""]
-    row(header2)
-
-    print(f"  {sep}")
-
-    # 数据行
+    # 计算差异
     pw_diff = round(pw_check - pickup_weight, 3)
+    pa_diff = round(pa_check - pickup_amt, 2)
     rpw_diff = round(rpw_check - real_pickup_weight, 3)
     srw_diff = round(srw_check - return_weight, 3)
 
+    # 判断状态
     pw_status = "✅" if abs(pw_diff) <= WEIGHT_TOLERANCE else "❌"
+    pa_status = "✅" if abs(pa_diff) <= 0.01 else "❌"
     rpw_status = "✅" if abs(rpw_diff) <= WEIGHT_TOLERANCE else "❌"
     srw_status = "✅" if abs(srw_diff) <= WEIGHT_TOLERANCE else "❌"
 
-    data = [
-        "重量",
-        format_weight(pw_check),
-        format_weight(pickup_weight),
-        format_weight(pw_diff) if pw_diff != 0 else "0",
-        format_weight(rpw_check),
-        format_weight(real_pickup_weight),
-        format_weight(rpw_diff) if rpw_diff != 0 else "0",
-        format_weight(srw_check),
-        format_weight(return_weight),
-        format_weight(srw_diff) if srw_diff != 0 else "0",
-        f"{pw_status}{rpw_status}{srw_status}",
-    ]
-    row(data)
+    # 打印合同名称
+    print(f"  📝 销售合同名称：{display_name}")
+    print()
 
-    print(f"  {sep}")
+    # 提单重量
+    print("  提单重量(t):")
+    print(f"    销售合同业务检查：{format_weight(pw_check)}")
+    print(f"    销售提单业务检查：{format_weight(pickup_weight)}")
+    print(f"    差异：{format_weight(pw_diff)}  {pw_status}")
+    print()
 
-    # 金额行（仅提单金额 vs 提单检查金额）
-    pa_diff = round(pa_check - pickup_amt, 2)
-    pa_status = "✅" if abs(pa_diff) <= 0.01 else "❌"
+    # 提单金额
+    print("  提单金额(¥):")
+    print(f"    销售合同业务检查：¥{format_amount(pa_check)}")
+    print(f"    销售提单业务检查：¥{format_amount(pickup_amt)}")
+    print(f"    差异：¥{format_amount(pa_diff)}  {pa_status}")
+    print()
 
-    amt_header = ["提单金额(¥)", "合同检查", "提单检查", "差异", "", "", "", "", "", "", "状态"]
-    row(amt_header)
-    print(f"  {sep}")
+    # 实提重量
+    print("  实提重量(t):")
+    print(f"    销售合同业务检查：{format_weight(rpw_check)}")
+    print(f"    销售实提业务检查：{format_weight(real_pickup_weight)}")
+    print(f"    差异：{format_weight(rpw_diff)}  {rpw_status}")
+    print()
 
-    amt_data = [
-        "",
-        format_amount(pa_check),
-        format_amount(pickup_amt),
-        format_amount(pa_diff) if pa_diff != 0 else "0",
-        "—", "—", "—", "—", "—", "—",
-        pa_status,
-    ]
-    row(amt_data)
-    print(f"  {sep}")
+    # 退货重量
+    print("  退货重量(t):")
+    print(f"    销售合同业务检查：{format_weight(srw_check)}")
+    print(f"    销售退货报表：{format_weight(return_weight)}")
+    print(f"    差异：{format_weight(srw_diff)}  {srw_status}")
+    print()
 
 
 # ============================================================
@@ -711,11 +727,137 @@ def print_detailed_records(title, records, weight_field="sumWeight", amount_fiel
 
 
 # ============================================================
-# 主流程
+# PDF 生成功能
 # ============================================================
 
+# 尝试注册中文字体
+CHINESE_FONT = None
+FONT_PATHS = [
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/System/Library/Fonts/Supplemental/Songti SC.ttc",
+    "/Library/Fonts/Arial Unicode.ttf",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+]
+
+for font_path in FONT_PATHS:
+    if os.path.exists(font_path):
+        try:
+            pdfmetrics.registerFont(TTFont("ChineseFont", font_path))
+            CHINESE_FONT = "ChineseFont"
+            break
+        except:
+            continue
+
+if not CHINESE_FONT:
+    CHINESE_FONT = "Helvetica"  # 回退到默认字体（不支持中文）
+
+
+def generate_pdf(output_path, ordered_contracts, contract_check_map, pickup_sum_map, pickup_amount_map,
+                real_pickup_sum_map, sell_return_sum_map, name_map, pickup_detail_map,
+                real_pickup_detail_map, sell_return_detail_map):
+    """生成 PDF 报告"""
+
+    doc = SimpleDocTemplate(output_path, pagesize=A4)
+    styles = getSampleStyleSheet()
+
+    # 创建支持中文的样式
+    if CHINESE_FONT != "Helvetica":
+        style_normal = ParagraphStyle("ChineseNormal", fontName=CHINESE_FONT, fontSize=10)
+        style_heading = ParagraphStyle("ChineseHeading", fontName=CHINESE_FONT, fontSize=12, leading=14)
+        style_title = ParagraphStyle("ChineseTitle", fontName=CHINESE_FONT, fontSize=16, leading=18)
+    else:
+        style_normal = styles["Normal"]
+        style_heading = styles["Heading2"]
+        style_title = styles["Title"]
+
+    story = []
+
+    # 标题
+    story.append(Paragraph("销售合同业务检查数据核对报告", style_title))
+    story.append(Spacer(1, 0.5 * cm))
+
+    # 遍历每个合同
+    for idx, contract_no in enumerate(ordered_contracts):
+        display_name = name_map.get(contract_no, contract_no)
+        check_data = contract_check_map.get(contract_no)
+        pickup_weight = round(pickup_sum_map.get(contract_no, 0), 3)
+        pickup_amt = round(pickup_amount_map.get(contract_no, 0), 2)
+        real_pickup_weight = round(real_pickup_sum_map.get(contract_no, 0), 3)
+        return_weight = round(sell_return_sum_map.get(contract_no, 0), 3)
+
+        if check_data:
+            pw_check = round(check_data["newPickupWeight"], 3)
+            pa_check = round(check_data["newPickupSumAmount"], 2)
+            rpw_check = round(check_data["newRealPickWeight"], 3)
+            srw_check = round(check_data["newSellReturnWeight"], 3)
+        else:
+            pw_check = pa_check = rpw_check = srw_check = 0
+
+        # 合同标题
+        status = "✅" if (
+            abs(pw_check - pickup_weight) <= WEIGHT_TOLERANCE and
+            abs(pa_check - pickup_amt) <= 0.01 and
+            abs(rpw_check - real_pickup_weight) <= WEIGHT_TOLERANCE and
+            abs(srw_check - return_weight) <= WEIGHT_TOLERANCE
+        ) else "❌"
+
+        story.append(Paragraph(f"{status} [{idx + 1}/{len(ordered_contracts)}] {display_name}", style_heading))
+        story.append(Spacer(1, 0.3 * cm))
+
+        # 合同基本信息
+        if check_data:
+            info_data = [
+                ["SAP编码", check_data.get("sapCode", "")],
+                ["客户名称", check_data.get("customerName", "")],
+                ["品牌", check_data.get("brandName", "")],
+                ["材质", check_data.get("materialName", "")],
+                ["规格", check_data.get("specName", "")],
+            ]
+            info_table = Table(info_data, colWidths=[4 * cm, 12 * cm])
+            info_table.setStyle(TableStyle([
+                ("FONTNAME", (0, 0), (-1, -1), CHINESE_FONT),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]))
+            story.append(info_table)
+            story.append(Spacer(1, 0.3 * cm))
+
+        # 对比数据表格
+        comparison_data = [
+            ["对比字段", "销售合同业务检查", "销售提单业务检查", "销售实提业务检查", "销售退货报表"],
+            ["提单重量(t)", format_weight(pw_check), format_weight(pickup_weight), "—", "—"],
+            ["提单金额(¥)", format_amount(pa_check), format_amount(pickup_amt), "—", "—"],
+            ["实提重量(t)", format_weight(rpw_check), "—", format_weight(real_pickup_weight), "—"],
+            ["退货重量(t)", format_weight(srw_check), "—", "—", format_weight(return_weight)],
+        ]
+
+        comp_table = Table(comparison_data, colWidths=[3.5 * cm, 3.5 * cm, 3.5 * cm, 3.5 * cm, 3.5 * cm])
+        comp_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), CHINESE_FONT),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+        ]))
+        story.append(comp_table)
+        story.append(Spacer(1, 0.5 * cm))
+
+        # 分页（避免表格被切断）
+        if idx < len(ordered_contracts) - 1:
+            story.append(PageBreak())
+
+    # 生成 PDF
+    doc.build(story)
+    print(f"📄 PDF 报告已生成：{output_path}")
+
 def main():
-    contract_list = get_contract_list()
+    result = get_contract_list()
+    if isinstance(result, tuple):
+        contract_list, output_format = result
+    else:
+        contract_list = result
+        output_format = "console"
 
     print("🔄 正在查询销售合同业务检查数据...")
     contract_check_records = fetch_contract_check(contract_list)
@@ -771,6 +913,17 @@ def main():
                              pickup_amount_map, real_pickup_amount_map, sell_return_amount_map,
                              display_name_map=name_map)
 
+    # 如果指定了 PDF 输出，生成 PDF 文件
+    if output_format == "pdf":
+        import time
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_path = f"/Users/cengqi/WorkBuddy/2026-06-13-18-07-35/合同数据核对报告_{timestamp}.pdf"
+        generate_pdf(output_path, ordered_contracts, contract_check_map, pickup_sum_map, pickup_amount_map,
+                    real_pickup_sum_map, sell_return_sum_map, name_map, pickup_detail_map,
+                    real_pickup_detail_map, sell_return_detail_map)
+        return
+
+    # 否则，输出到控制台
     # 输出每个合同的详细数据
     diff_count = 0
     for idx, contract_no in enumerate(ordered_contracts):
